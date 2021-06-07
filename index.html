@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <title>CTDM extraction</title>
+    <link rel="stylesheet" href="bootstrap.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1 class="title">Extracting CTDM from UML Diagrams</h1>
+    <hr>
+    <div class="cards">
+        <div class="card" id="seq-card">
+            <h3 class="card__title">UML Sequence Diagram</h3>
+            <div class="textbox">
+                Enter the diagram:<br>
+                <textarea id="sequence_data" class="form-control"></textarea>
+            </div>
+            <button class="seq-extract-btn btn btn-primary">EXTRACT CTDM</button>
+    
+            <table id="sequence-table" class="table table-hover"></table>
+    
+        </div>
+    
+        <div class="card" id="act-card">
+            <h3 class="card__title">UML Activity Diagram</h3>
+            <div class="textbox">
+                Enter the diagram:<br>
+                <textarea id="activity_data" class="form-control"></textarea>
+            </div>
+            <button class="act-extract-btn btn btn-primary">EXTRACT CTDM</button>
+            <table id="activity-table" class="table table-hover"></table>
+    
+        </div>
+    
+        <div class="card" id="use-card">
+            <h3 class="card__title">UML Use-Case Diagram</h3>
+            <div class="textbox">
+                Enter the diagram:<br>
+                <textarea id="usecase_data" class="form-control"></textarea>
+            </div>
+            <button class="use-extract-btn btn btn-primary">EXTRACT CTDM</button>
+            <table id="usecase-table" class="table table-hover"></table>
+        </div>
+    </div>
+
+    <div class="footer">
+        <button id="combine-btn" class="btn btn-success">COMBINE</button>
+        <table id="combined-table" class="table table-hover"></table>
+    </div>
+
+    <script src="/sequence.js"></script>
+    <script src="/activity.js"></script>
+    <script src="/usecase.js"></script>
+
+    <script>
+
+        function getConstants () {
+            const parameterIP = {
+                sequence: 0.776,
+                activity: 0.776,
+                usecase: 0.79
+            }
+            const parameterIR = {
+                sequence: 0.653,
+                activity: 0.59,
+                usecase: 0.953
+            }
+            const valueIP = {
+                sequence: 1,
+                activity: 0.916,
+                usecase: 0.666
+            }
+            const valueIR = {
+                sequence: 0.466,
+                activity: 0.65,
+                usecase: 0.136
+            }
+            const constants = {
+                parameter: {
+                    IP: parameterIP, IR: parameterIR
+                },
+                value: {
+                    IP: valueIP, IR: valueIR
+                }
+            }
+            return constants
+        }
+
+
+        function makeTable (ctdm) {
+            let html = ''
+            let th = '<tr class="table-danger">'
+            for (let parameter in ctdm) 
+                th += `<th>${parameter}</th>`
+            th += '</tr>'
+            let max_values = 0
+            for (let parameter in ctdm)
+                max_values = Math.max(max_values, ctdm[parameter].length)
+            let tbody = ''
+            for (let i = 0; i < max_values; i++) {
+                tbody += '<tr class="table-primary">'
+                for (let parameter in ctdm) {
+                    let values = ctdm[parameter]
+                    if (i < values.length) {
+                        tbody += `<td>${values[i]}</td>`
+                    } else {
+                        tbody += `<td>-</td>`
+                    }
+                }
+                tbody += '</tr>'
+            }
+            html = th + tbody
+            return html
+        }
+
+        let sequenceCtdm, activityCtdm, usecaseCtdm, combinedCtdm
+
+        document.querySelector('.seq-extract-btn').addEventListener('click', () => {
+            const data = document.querySelector('#sequence_data').value
+            const ctdm = extractSequenceCtdm(data)
+            sequenceCtdm = ctdm
+            let tableHtml = makeTable(ctdm)
+            document.querySelector('#sequence-table').innerHTML = tableHtml
+        })
+        document.querySelector('.act-extract-btn').addEventListener('click', () => {
+            const data = document.querySelector('#activity_data').value
+            const ctdm = extractActivityCtdm(data)
+            activityCtdm = ctdm
+            let tableHtml = makeTable(ctdm)
+            document.querySelector('#activity-table').innerHTML = tableHtml
+        })
+        document.querySelector('.use-extract-btn').addEventListener('click', () => {
+            const data = document.querySelector('#usecase_data').value
+            const ctdm = extractUsecaseCtdm(data)
+            activityCtdm = ctdm
+            let tableHtml = makeTable(ctdm)
+            document.querySelector('#usecase-table').innerHTML = tableHtml
+        })
+
+        document.querySelector('#combine-btn').addEventListener('click', () => {
+            let allParameters = new Set()
+            let allValues = new Set()
+
+            if (sequenceCtdm) {
+                for (let parameter in sequenceCtdm) {
+                    allParameters.add(parameter)
+                    for (let value of sequenceCtdm[parameter]) {
+                        allValues.add(parameter + '*' + value)
+                    }
+                }
+            }
+            if (activityCtdm) {
+                for (let parameter in activityCtdm) {
+                    allParameters.add(parameter)
+                    for (let value of activityCtdm[parameter]) {
+                        allValues.add(parameter + '*' + value)
+                    }
+                }
+            }
+            if (usecaseCtdm) {
+                for (let parameter in usecaseCtdm) {
+                    allParameters.add(parameter)
+                    for (let value of usecaseCtdm[parameter]) {
+                        allValues.add(parameter + '*' + value)
+                    }
+                }
+            }
+
+            const constants = getConstants()
+
+            let pConfidence = []
+            allParameters.forEach(parameter => {
+                let p = {
+                    sequence: (sequenceCtdm && parameter in sequenceCtdm) ? 1 : 0,
+                    activity: (activityCtdm && parameter in activityCtdm) ? 1 : 0,
+                    usecase: (usecaseCtdm && parameter in usecaseCtdm) ? 1 : 0,
+                }
+                let {IP, IR} = constants.parameter
+                let confidence = 0
+                confidence += IP.sequence * p.sequence + (IP.sequence * (1 - IR.sequence) * (1 - p.sequence))
+                confidence += IP.activity * p.activity + (IP.activity * (1 - IR.activity) * (1 - p.activity))
+                confidence += IP.usecase * p.usecase + (IP.usecase * (1 - IR.usecase) * (1 - p.usecase))
+                
+                pConfidence.push({
+                    parameter,
+                    confidence
+                })
+            })
+
+            let vConfidence = []
+            allValues.forEach(key => {
+                let [parameter, value] = key.split('*')
+                let p = {
+                    sequence: (sequenceCtdm && sequenceCtdm[parameter] &&sequenceCtdm[parameter].includes(value)) ? 1 : 0,
+                    activity: (activityCtdm && activityCtdm[parameter] && activityCtdm[parameter].includes(value)) ? 1 : 0,
+                    usecase: (usecaseCtdm && usecaseCtdm[parameter] && usecaseCtdm[parameter].includes(value)) ? 1 : 0,
+                }
+                let {IR, IP} = constants.value
+                let confidence = 0
+                confidence += IP.sequence * p.sequence + (IP.sequence * (1 - IR.sequence) * (1 - p.sequence))
+                confidence += IP.activity * p.activity + (IP.activity * (1 - IR.activity) * (1 - p.activity))
+                confidence += IP.usecase * p.usecase + (IP.usecase * (1 - IR.usecase) * (1 - p.usecase))
+                
+                vConfidence.push({
+                    parameter,
+                    value,
+                    confidence
+                })
+            })
+
+
+            pConfidence.sort((a, b) => (a.confidence > b.confidence) ? 1 : -1).reverse()
+            vConfidence.sort((a, b) => (a.confidence > b.confidence) ? 1 : -1).reverse()
+
+            console.log(pConfidence)
+            console.log(vConfidence)
+            
+            combinedCtdm = {}
+            for (let element of pConfidence) {
+                combinedCtdm[element.parameter] = []
+            }
+
+            for (let element of vConfidence) {
+                combinedCtdm[element.parameter].push(element.value)
+            }
+            let tableHtml = makeTable(combinedCtdm)
+            document.querySelector('#combined-table').innerHTML = tableHtml
+
+        })
+
+    
+    </script>
+
+</body>
+</html>
